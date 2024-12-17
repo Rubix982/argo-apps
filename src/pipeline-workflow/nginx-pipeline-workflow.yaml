@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: nginx-pipeline-
+  namespace: argo
+spec:
+  entrypoint: nginx-deploy-pipeline
+  templates:
+    - name: nginx-deploy-pipeline
+      dag:
+        tasks:
+          - name: pre-deployment-check
+            template: pre-check
+
+          - name: deploy-nginx
+            depends: pre-deployment-check
+            template: deploy-nginx
+
+          - name: post-deployment-test
+            depends: deploy-nginx
+            template: post-check
+
+    # Pre-deployment check (example: linting)
+    - name: pre-check
+      container:
+        image: alpine
+        command: [sh, -c]
+        args:
+          - echo "Running pre-deployment check..."; sleep 3; echo "Pre-check complete!"
+
+    # Deployment task (ArgoCD sync)
+    - name: deploy-nginx
+      container:
+        image: curlimages/curl
+        command: [sh, -c]
+        args:
+          - |
+            echo "Triggering ArgoCD application sync...";
+            curl -X POST -k \
+              https://argocd-server.argocd.svc/api/v1/applications/nginx-app/sync \
+              -H "Authorization: Bearer <YOUR_ARGOCD_TOKEN>";
+            echo "ArgoCD Sync Triggered.";
+      
+    # Post-deployment verification
+    - name: post-check
+      container:
+        image: busybox
+        command: [sh, -c]
+        args:
+          - |
+            echo "Running post-deployment verification...";
+            sleep 5;
+            echo "Post-check complete: Application verified!";
